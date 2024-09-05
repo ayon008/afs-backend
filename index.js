@@ -20,7 +20,6 @@ const client = new MongoClient(uri, {
 });
 
 
-
 // VERIFY TOKENS
 const verify = (req, res, next) => {
     const authorization = req.headers.authorization;
@@ -40,6 +39,39 @@ const verify = (req, res, next) => {
 }
 
 
+const updatePointTable = async (name, uid, category, pointsByDistance, pointsByTime, collection) => {
+    const query = { uid: uid };
+    const options = { upsert: true };
+
+    // Calculate total points for the specific category
+    const totalCategoryPoints = pointsByDistance + pointsByTime;
+
+    // Construct the update data
+    const updatedData = {
+        $set: {
+            name: name,
+            uid: uid,
+        },
+        $inc: {
+            // Increment the points for the specific category
+            [`category.${category}.pointsByDistance`]: pointsByDistance,
+            [`category.${category}.pointsByTime`]: pointsByTime,
+            [`category.${category}.total`]: totalCategoryPoints,
+
+            // Increment the global points and total
+            pointsByDistance: pointsByDistance,  // Add to global distance points
+            pointsByTime: pointsByTime,          // Add to global time points
+            total: totalCategoryPoints           // Add to global total points
+        }
+    };
+
+    // Execute the update
+    const result = await collection.updateOne(query, updatedData, options);
+    return result;
+};
+
+
+
 app.get('/', function (req, res) {
     res.send('server is running')
 })
@@ -50,6 +82,7 @@ async function run() {
         const dataBase = client.db('afsGames');
         const usersCollection = dataBase.collection('users');
         const GeoCollection = dataBase.collection('geo-json');
+        const pointTable = dataBase.collection('point-table');
 
 
         // Post user Email and get token
@@ -173,16 +206,139 @@ async function run() {
             }
         });
 
-
         // upload geoJSON
         app.post('/geoJson', async (req, res) => {
-            const data = req.body;
-            if (!data) {
-                return res.status(400).send({ error: true, message: 'Invalid geoJSON data' });
+            try {
+                const data = req.body;
+
+                // Input validation: Check if required fields are provided
+                if (!data || !data.uid || !data.category || !data.name || !data.pointsByTime || !data.pointsByDistance) {
+                    return res.status(400).send({ error: true, message: 'Invalid input. Required fields are missing.' });
+                }
+
+                const { uid, category, name, pointsByTime, pointsByDistance } = data;
+                const point = pointsByTime + pointsByDistance;
+
+                // Insert the geoJSON data into the collection
+                const result = await GeoCollection.insertOne(data);
+
+                // Check if the insert was acknowledged by MongoDB
+                if (result.acknowledged) {
+                    // Call updatePointTable function to update the points
+                    await updatePointTable(name, uid, category, pointsByDistance, pointsByTime, pointTable); // Ensure updatePointTable is awaited if it's async
+                    return res.status(201).send({ success: true, message: 'Data inserted and points updated', result });
+                } else {
+                    return res.status(500).send({ error: true, message: 'Data insertion failed' });
+                }
+            } catch (error) {
+                console.error('Error in /geoJson route:', error);
+                // Handle server errors
+                return res.status(500).send({ error: true, message: 'Server error occurred', details: error.message });
             }
-            const result = await GeoCollection.insertOne(data);
-            res.send(result);
-        })
+        });
+
+        app.get('/totalPoints', async function (req, res) {
+            const uid = req.query.uid;
+
+            // Validate the UID
+            if (!uid) {
+                return res.status(400).json({ error: 'UID is required' });
+            }
+
+            try {
+                // Check if the collection is empty
+                const isCollectionEmpty = await pointTable.countDocuments() === 0;
+                if (isCollectionEmpty) {
+                    return res.status(200).json([]); // Return empty array if collection is empty
+                }
+
+                // Fetch user points from the database
+                const user = await pointTable.findOne({ uid });
+
+                if (!user) {
+                    const topThreeUsers = await pointTable.find({})
+                        .sort({ total: -1 }) // Sort by total points in descending order
+                        .limit(3)
+                        .toArray();
+
+                    // Calculate positions for the top 3 users
+                    const response = await Promise.all(topThreeUsers.map(async (user, index) => ({
+                        ...user,
+                        position: index + 1 // Assign position based on the index
+                    })));
+
+                    return res.status(200).json(response); // Return top 3 users with positions
+                }
+
+                const userPoints = user.total;
+
+                // Fetch one higher user
+                const higher = await pointTable.find({ total: { $gt: userPoints } })
+                    .sort({ total: -1 })
+                    .limit(1)
+                    .toArray();
+
+                // Fetch two lower users
+                const lower = await pointTable.find({ total: { $lt: userPoints } })
+                    .sort({ total: -1 })
+                    .limit(2)
+                    .toArray();
+
+                let response = [];
+
+                // Case 1: User has the highest points
+                if (higher.length === 0) {
+                    const lowerPositions = await Promise.all(lower.map(async (user) => ({
+                        ...user,
+                        position: await pointTable.countDocuments({ total: { $gt: user.total } }) + 1
+                    })));
+
+                    response = [
+                        { ...user, position: 1 }, // User is at the top
+                        ...lowerPositions // Two lower users
+                    ];
+                }
+                // Case 2: User has the lowest points
+                else if (lower.length === 0) {
+                    const additionalHigher = await pointTable.find({ total: { $gt: userPoints } })
+                        .sort({ total: -1 })
+                        .skip(1)
+                        .limit(2)
+                        .toArray();
+
+                    const higherPositions = await Promise.all(additionalHigher.map(async (user) => ({
+                        ...user,
+                        position: await pointTable.countDocuments({ total: { $gt: user.total } }) + 1
+                    })));
+
+                    response = [
+                        { ...higher[0], position: await pointTable.countDocuments({ total: { $gte: higher[0].total } }) + 1 },
+                        ...higherPositions,
+                        { ...user, position: await pointTable.countDocuments({ total: { $gte: userPoints } }) + 1 }
+                    ];
+                }
+                // Case 3: User is in the middle
+                else {
+                    const higherPosition = await pointTable.countDocuments({ total: { $gte: higher[0].total } }) + 1;
+                    const lowerPositions = await Promise.all(lower.map(async (user) => ({
+                        ...user,
+                        position: await pointTable.countDocuments({ total: { $gt: user.total } }) + 1
+                    })));
+
+                    response = [
+                        { ...higher[0], position: higherPosition }, // One higher user
+                        { ...user, position: await pointTable.countDocuments({ total: { $gte: userPoints } }) + 1 }, // Current user
+                        ...lowerPositions // One lower user
+                    ];
+                }
+
+                // Return only the 3 required users (current user, higher, and lower)
+                return res.status(200).json(response);
+            } catch (error) {
+                console.error('Error fetching leaderboard data:', error.message);
+                return res.status(500).json({ error: 'Internal server error' });
+            }
+        });
 
 
         // Send a ping to confirm a successful connection
