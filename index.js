@@ -236,109 +236,112 @@ async function run() {
                 return res.status(500).send({ error: true, message: 'Server error occurred', details: error.message });
             }
         });
+        //     const uid = req.query.uid;
 
-        app.get('/totalPoints', async function (req, res) {
-            const uid = req.query.uid;
+        //     // Validate the UID
+        //     if (!uid) {
+        //         return res.status(400).json({ error: 'UID is required' });
+        //     }
 
-            // Validate the UID
-            if (!uid) {
-                return res.status(400).json({ error: 'UID is required' });
-            }
+        //     try {
+        //         // Check if the collection is empty
+        //         const isCollectionEmpty = await pointTable.countDocuments() === 0;
+        //         if (isCollectionEmpty) {
+        //             return res.status(200).json([]); // Return empty array if collection is empty
+        //         }
 
-            try {
-                // Check if the collection is empty
-                const isCollectionEmpty = await pointTable.countDocuments() === 0;
-                if (isCollectionEmpty) {
-                    return res.status(200).json([]); // Return empty array if collection is empty
-                }
+        //         // Fetch user points from the database
+        //         const user = await pointTable.findOne({ uid });
 
-                // Fetch user points from the database
-                const user = await pointTable.findOne({ uid });
+        //         if (!user) {
+        //             const topThreeUsers = await pointTable.find({})
+        //                 .sort({ total: -1 }) // Sort by total points in descending order
+        //                 .limit(3)
+        //                 .toArray();
 
-                if (!user) {
-                    const topThreeUsers = await pointTable.find({})
-                        .sort({ total: -1 }) // Sort by total points in descending order
-                        .limit(3)
-                        .toArray();
+        //             // Calculate positions for the top 3 users
+        //             const response = await Promise.all(topThreeUsers.map(async (user, index) => ({
+        //                 ...user,
+        //                 position: index + 1 // Assign position based on the index
+        //             })));
 
-                    // Calculate positions for the top 3 users
-                    const response = await Promise.all(topThreeUsers.map(async (user, index) => ({
-                        ...user,
-                        position: index + 1 // Assign position based on the index
-                    })));
+        //             return res.status(200).json(response); // Return top 3 users with positions
+        //         }
 
-                    return res.status(200).json(response); // Return top 3 users with positions
-                }
+        //         const userPoints = user.total;
 
-                const userPoints = user.total;
+        //         // Fetch one higher user
+        //         const higher = await pointTable.find({ total: { $gt: userPoints } })
+        //             .sort({ total: -1 })
+        //             .limit(1)
+        //             .toArray();
 
-                // Fetch one higher user
-                const higher = await pointTable.find({ total: { $gt: userPoints } })
-                    .sort({ total: -1 })
-                    .limit(1)
-                    .toArray();
+        //         // Fetch two lower users
+        //         const lower = await pointTable.find({ total: { $lt: userPoints } })
+        //             .sort({ total: -1 })
+        //             .limit(2)
+        //             .toArray();
 
-                // Fetch two lower users
-                const lower = await pointTable.find({ total: { $lt: userPoints } })
-                    .sort({ total: -1 })
-                    .limit(2)
-                    .toArray();
+        //         let response = [];
 
-                let response = [];
+        //         // Case 1: User has the highest points
+        //         if (higher.length === 0) {
+        //             const lowerPositions = await Promise.all(lower.map(async (user) => ({
+        //                 ...user,
+        //                 position: await pointTable.countDocuments({ total: { $gt: user.total } }) + 1
+        //             })));
 
-                // Case 1: User has the highest points
-                if (higher.length === 0) {
-                    const lowerPositions = await Promise.all(lower.map(async (user) => ({
-                        ...user,
-                        position: await pointTable.countDocuments({ total: { $gt: user.total } }) + 1
-                    })));
+        //             response = [
+        //                 { ...user, position: 1 }, // User is at the top
+        //                 ...lowerPositions // Two lower users
+        //             ];
+        //         }
+        //         // Case 2: User has the lowest points
+        //         else if (lower.length === 0) {
+        //             const additionalHigher = await pointTable.find({ total: { $gt: userPoints } })
+        //                 .sort({ total: -1 })
+        //                 .skip(1)
+        //                 .limit(2)
+        //                 .toArray();
 
-                    response = [
-                        { ...user, position: 1 }, // User is at the top
-                        ...lowerPositions // Two lower users
-                    ];
-                }
-                // Case 2: User has the lowest points
-                else if (lower.length === 0) {
-                    const additionalHigher = await pointTable.find({ total: { $gt: userPoints } })
-                        .sort({ total: -1 })
-                        .skip(1)
-                        .limit(2)
-                        .toArray();
+        //             const higherPositions = await Promise.all(additionalHigher.map(async (user) => ({
+        //                 ...user,
+        //                 position: await pointTable.countDocuments({ total: { $gt: user.total } }) + 1
+        //             })));
 
-                    const higherPositions = await Promise.all(additionalHigher.map(async (user) => ({
-                        ...user,
-                        position: await pointTable.countDocuments({ total: { $gt: user.total } }) + 1
-                    })));
+        //             response = [
+        //                 { ...higher[0], position: await pointTable.countDocuments({ total: { $gte: higher[0].total } }) + 1 },
+        //                 ...higherPositions,
+        //                 { ...user, position: await pointTable.countDocuments({ total: { $gte: userPoints } }) + 1 }
+        //             ];
+        //         }
+        //         // Case 3: User is in the middle
+        //         else {
+        //             const higherPosition = await pointTable.countDocuments({ total: { $gte: higher[0].total } }) + 1;
+        //             const lowerPositions = await Promise.all(lower.map(async (user) => ({
+        //                 ...user,
+        //                 position: await pointTable.countDocuments({ total: { $gt: user.total } }) + 1
+        //             })));
 
-                    response = [
-                        { ...higher[0], position: await pointTable.countDocuments({ total: { $gte: higher[0].total } }) + 1 },
-                        ...higherPositions,
-                        { ...user, position: await pointTable.countDocuments({ total: { $gte: userPoints } }) + 1 }
-                    ];
-                }
-                // Case 3: User is in the middle
-                else {
-                    const higherPosition = await pointTable.countDocuments({ total: { $gte: higher[0].total } }) + 1;
-                    const lowerPositions = await Promise.all(lower.map(async (user) => ({
-                        ...user,
-                        position: await pointTable.countDocuments({ total: { $gt: user.total } }) + 1
-                    })));
+        //             response = [
+        //                 { ...higher[0], position: higherPosition }, // One higher user
+        //                 { ...user, position: await pointTable.countDocuments({ total: { $gte: userPoints } }) + 1 }, // Current user
+        //                 ...lowerPositions // One lower user
+        //             ];
+        //         }
 
-                    response = [
-                        { ...higher[0], position: higherPosition }, // One higher user
-                        { ...user, position: await pointTable.countDocuments({ total: { $gte: userPoints } }) + 1 }, // Current user
-                        ...lowerPositions // One lower user
-                    ];
-                }
+        //         // Return only the 3 required users (current user, higher, and lower)
+        //         return res.status(200).json(response);
+        //     } catch (error) {
+        //         console.error('Error fetching leaderboard data:', error.message);
+        //         return res.status(500).json({ error: 'Internal server error' });
+        //     }
+        // });
 
-                // Return only the 3 required users (current user, higher, and lower)
-                return res.status(200).json(response);
-            } catch (error) {
-                console.error('Error fetching leaderboard data:', error.message);
-                return res.status(500).json({ error: 'Internal server error' });
-            }
-        });
+        app.get('/totalPoints', async (req, res) => {
+            const find = await pointTable.find().sort({ total: -1 }).toArray();
+            res.send(find);
+        })
 
 
         // Send a ping to confirm a successful connection
