@@ -39,7 +39,7 @@ const verify = (req, res, next) => {
 }
 
 
-const updatePointTable = async (name, uid, category, pointsByDistance, pointsByTime, collection) => {
+const updatePointTable = async (displayName, uid, photoURL, collection, category, pointsByDistance, pointsByTime) => {
     const query = { uid: uid };
     const options = { upsert: true };
 
@@ -49,8 +49,9 @@ const updatePointTable = async (name, uid, category, pointsByDistance, pointsByT
     // Construct the update data
     const updatedData = {
         $set: {
-            name: name,
+            displayName: displayName,
             uid: uid,
+            photoURL: photoURL,
         },
         $inc: {
             // Increment the points for the specific category
@@ -176,6 +177,9 @@ async function run() {
                 const options = { upsert: true };
                 const data = req.body;
 
+                const { displayName, photoURL, uid } = data;
+
+
                 if (req.decoded.email !== data.email) {
                     return res.status(401).send({ message: 'Unauthorized Access' });
                 }
@@ -195,6 +199,11 @@ async function run() {
                 // Perform update operation
                 const result = await usersCollection.updateOne(query, updatedData, options);
 
+                const updatePointData =
+                    await pointTable.updateOne({ uid: uid },
+                        { $set: { displayName: displayName, photoURL: photoURL } }, {});
+                console.log(updatePointData);
+
                 if (result.matchedCount === 0 && result.upsertedCount === 0) {
                     return res.status(404).send({ error: true, message: 'User not found' });
                 }
@@ -212,12 +221,17 @@ async function run() {
                 const data = req.body;
 
                 // Input validation: Check if required fields are provided
-                if (!data || !data.uid || !data.category || !data.name || !data.pointsByTime || !data.pointsByDistance) {
+                if (!data || !data.uid || !data.category || !data.pointsByTime || !data.pointsByDistance) {
                     return res.status(400).send({ error: true, message: 'Invalid input. Required fields are missing.' });
                 }
 
-                const { uid, category, name, pointsByTime, pointsByDistance } = data;
-                const point = pointsByTime + pointsByDistance;
+                const { category, pointsByTime, uid, pointsByDistance } = data;
+                // const point = pointsByTime + pointsByDistance;
+
+                const userData = await usersCollection.findOne({ uid: { $eq: uid } });
+                const { displayName,
+                    photoURL
+                } = userData;
 
                 // Insert the geoJSON data into the collection
                 const result = await GeoCollection.insertOne(data);
@@ -225,7 +239,7 @@ async function run() {
                 // Check if the insert was acknowledged by MongoDB
                 if (result.acknowledged) {
                     // Call updatePointTable function to update the points
-                    await updatePointTable(name, uid, category, pointsByDistance, pointsByTime, pointTable); // Ensure updatePointTable is awaited if it's async
+                    await updatePointTable(displayName, uid, photoURL, pointTable, category, pointsByDistance, pointsByTime); // Ensure updatePointTable is awaited if it's async
                     return res.status(201).send({ success: true, message: 'Data inserted and points updated', result });
                 } else {
                     return res.status(500).send({ error: true, message: 'Data insertion failed' });
@@ -236,6 +250,8 @@ async function run() {
                 return res.status(500).send({ error: true, message: 'Server error occurred', details: error.message });
             }
         });
+
+
         //     const uid = req.query.uid;
 
         //     // Validate the UID
@@ -342,7 +358,6 @@ async function run() {
             const find = await pointTable.find().sort({ total: -1 }).toArray();
             res.send(find);
         })
-
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
