@@ -359,6 +359,21 @@ async function run() {
             res.send(find);
         })
 
+        app.get('/fileName/:uid', async (req, res) => {
+            const uid = req.params.uid;
+            const query = { uid: uid };
+            console.log('clicked');
+            const options = {
+                projection: { filename: 1 },
+            }
+            const files = await GeoCollection.find(query, options).toArray();
+            console.log(files);
+
+            res.send(files);
+        })
+
+
+
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
