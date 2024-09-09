@@ -225,7 +225,7 @@ async function run() {
                     return res.status(400).send({ error: true, message: 'Invalid input. Required fields are missing.' });
                 }
 
-                const { category, pointsByTime, uid, pointsByDistance } = data;
+                const { category, pointsByTime, uid, pointsByDistance, status } = data;
                 // const point = pointsByTime + pointsByDistance;
 
                 const userData = await usersCollection.findOne({ uid: { $eq: uid } });
@@ -239,7 +239,9 @@ async function run() {
                 // Check if the insert was acknowledged by MongoDB
                 if (result.acknowledged) {
                     // Call updatePointTable function to update the points
-                    await updatePointTable(displayName, uid, photoURL, pointTable, category, pointsByDistance, pointsByTime); // Ensure updatePointTable is awaited if it's async
+                    if (!status) {
+                        await updatePointTable(displayName, uid, photoURL, pointTable, category, pointsByDistance, pointsByTime);
+                    } // Ensure updatePointTable is awaited if it's async
                     return res.status(201).send({ success: true, message: 'Data inserted and points updated', result });
                 } else {
                     return res.status(500).send({ error: true, message: 'Data insertion failed' });
@@ -250,6 +252,22 @@ async function run() {
                 return res.status(500).send({ error: true, message: 'Server error occurred', details: error.message });
             }
         });
+
+
+        // app.patch('/updateStatus/:id', async (req, res) => {
+        //     const status = req.body.status;
+        //     const id = req.params.id;
+        //     const query = { _id: new ObjectId(id) };
+        //     const find = await GeoCollection.findOne(query);
+        //     const updateStatus = await GeoCollection.updateOne(query, { $set: { status: status } }, {});
+        //     const { category, pointsByTime, uid, pointsByDistance } = find;
+        //     const userData = await usersCollection.findOne({ uid: { $eq: uid } });
+        //     const { displayName,
+        //         photoURL
+        //     } = userData;
+        //     await updatePointTable(displayName, uid, photoURL, pointTable, category, pointsByDistance, pointsByTime);
+        //     res.send(updateStatus);
+        // })
 
 
         //     const uid = req.query.uid;
@@ -368,7 +386,6 @@ async function run() {
             }
             const files = await GeoCollection.find(query, options).toArray();
             console.log(files);
-
             res.send(files);
         })
 
