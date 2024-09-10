@@ -42,10 +42,8 @@ const verify = (req, res, next) => {
 const updatePointTable = async (displayName, uid, photoURL, collection, category, pointsByDistance, pointsByTime) => {
     const query = { uid: uid };
     const options = { upsert: true };
-
     // Calculate total points for the specific category
     const totalCategoryPoints = pointsByDistance + pointsByTime;
-
     // Construct the update data
     const updatedData = {
         $set: {
@@ -65,13 +63,10 @@ const updatePointTable = async (displayName, uid, photoURL, collection, category
             total: totalCategoryPoints           // Add to global total points
         }
     };
-
     // Execute the update
     const result = await collection.updateOne(query, updatedData, options);
     return result;
 };
-
-
 
 app.get('/', function (req, res) {
     res.send('server is running')
@@ -112,15 +107,12 @@ async function run() {
         app.post('/user', async (req, res) => {
             try {
                 const data = req.body;
-
                 // Validate input data
                 if (!data || !data.email) {
                     return res.status(400).send({ error: true, message: 'Invalid user data' });
                 }
-
                 const query = { $or: [{ uid: data.uid }, { email: data.email }] };
                 const userExists = await usersCollection.findOne(query);
-
                 if (userExists) {
                     return res.status(409).send({ message: 'User already exists' });
                 }
@@ -167,7 +159,6 @@ async function run() {
             }
         });
 
-
         // Update user by _id 
         app.patch('/user/:id', verify, async (req, res) => {
             try {
@@ -176,14 +167,11 @@ async function run() {
                 const query = { _id: new ObjectId(id) };
                 const options = { upsert: true };
                 const data = req.body;
-
                 const { displayName, photoURL, uid } = data;
-
 
                 if (req.decoded.email !== data.email) {
                     return res.status(401).send({ message: 'Unauthorized Access' });
                 }
-
                 // Prepare update operation
                 const updatedData = {
                     $set: {
@@ -253,21 +241,22 @@ async function run() {
             }
         });
 
-
-        // app.patch('/updateStatus/:id', async (req, res) => {
-        //     const status = req.body.status;
-        //     const id = req.params.id;
-        //     const query = { _id: new ObjectId(id) };
-        //     const find = await GeoCollection.findOne(query);
-        //     const updateStatus = await GeoCollection.updateOne(query, { $set: { status: status } }, {});
-        //     const { category, pointsByTime, uid, pointsByDistance } = find;
-        //     const userData = await usersCollection.findOne({ uid: { $eq: uid } });
-        //     const { displayName,
-        //         photoURL
-        //     } = userData;
-        //     await updatePointTable(displayName, uid, photoURL, pointTable, category, pointsByDistance, pointsByTime);
-        //     res.send(updateStatus);
-        // })
+        app.patch('/updateStatus/:id', async (req, res) => {
+            const status = req.body.status;
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const find = await GeoCollection.findOne(query);
+            const updateStatus = await GeoCollection.updateOne(query, { $set: { status: status } }, {});
+            const { category, pointsByTime, uid, pointsByDistance } = find;
+            const userData = await usersCollection.findOne({ uid: { $eq: uid } });
+            const { displayName,
+                photoURL
+            } = userData;
+            if (status) {
+                await updatePointTable(displayName, uid, photoURL, pointTable, category, pointsByDistance, pointsByTime);
+            }
+            res.send(updateStatus);
+        })
 
 
         //     const uid = req.query.uid;
@@ -379,8 +368,8 @@ async function run() {
 
         app.get('/fileName/:uid', async (req, res) => {
             const uid = req.params.uid;
+            console.log(uid);
             const query = { uid: uid };
-            console.log('clicked');
             const options = {
                 projection: { filename: 1 },
             }
@@ -388,8 +377,6 @@ async function run() {
             console.log(files);
             res.send(files);
         })
-
-
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
