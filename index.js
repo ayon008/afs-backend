@@ -167,7 +167,7 @@ async function run() {
                 const query = { _id: new ObjectId(id) };
                 const options = { upsert: true };
                 const data = req.body;
-                const { displayName, photoURL, uid } = data;
+                const { displayName, photoURL, uid, surName } = data;
 
                 if (req.decoded.email !== data.email) {
                     return res.status(401).send({ message: 'Unauthorized Access' });
@@ -189,7 +189,7 @@ async function run() {
 
                 const updatePointData =
                     await pointTable.updateOne({ uid: uid },
-                        { $set: { displayName: displayName, photoURL: photoURL } }, {});
+                        { $set: { displayName: displayName, photoURL: photoURL, surName: surName } }, {});
                 console.log(updatePointData);
 
                 if (result.matchedCount === 0 && result.upsertedCount === 0) {
