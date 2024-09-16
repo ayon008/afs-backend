@@ -67,15 +67,6 @@ const updatePointTable = async (displayName, uid, pays, photoURL, collection, ca
                 session: session,
                 total: totalTime,
                 distance: distance
-                // Increment points for the specified category
-                // [`category.${category}.pointsByDistance`]: pointsByDistance,
-                // [`category.${category}.pointsByTime`]: pointsByTime,
-                // [`category.${category}.total`]: totalCategoryPoints,
-
-                // // Increment global points and total
-                // pointsByDistance: pointsByDistance,  // Global distance points
-                // pointsByTime: pointsByTime,          // Global time points
-                // total: totalCategoryPoints           // Global total points
             }
         };
 
@@ -105,6 +96,28 @@ async function run() {
         const usersCollection = dataBase.collection('users');
         const GeoCollection = dataBase.collection('geo-json');
         const pointTable = dataBase.collection('point-table');
+        const sponsors = dataBase.collection('sponsors');
+
+
+        const verifyAdmin = async (req, res, next) => {
+            const adminEmail = req.decoded.email;
+            const query = { email: { $eq: adminEmail } }
+            const findAdmin = await usersCollection.findOne(query);
+            if (findAdmin.role !== 'admin') {
+                return res.status(403).send({ error: true, message: 'unauthorized access' })
+            }
+            next();
+        }
+
+        app.get('/user/admin/:email', verify, async (req, res) => {
+            const email = req.params.email;
+            if (req.decoded.email !== email) {
+                return res.status(401).send({ message: 'Invalid token' });
+            }
+            const query = { email };
+            const find = await usersCollection.findOne(query);
+            res.send({ admin: find?.role === 'admin' });
+        });
 
 
         // Post user Email and get token
@@ -305,6 +318,13 @@ async function run() {
             }
         });
 
+        // get GEoJSon
+        app.get('/geoJson', async (req, res) => {
+            const data = await GeoCollection.find().toArray();
+            res.send(data);
+        })
+
+
         app.patch('/updateStatus/:id', async (req, res) => {
             const status = req.body.status;
             const id = req.params.id;
@@ -337,6 +357,26 @@ async function run() {
             const files = await GeoCollection.find(query, options).toArray();
             console.log(files);
             res.send(files);
+        })
+
+
+        app.get('/sponsors', async (req, res) => {
+            const data = await sponsors.find().toArray();
+            res.send(data);
+        })
+
+        app.post('/sponsors', async (req, res) => {
+            const data = req.body;
+            const result = await sponsors.insertOne(data);
+            res.send(result);
+        })
+
+        app.delete('/sponsors/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            
+            const result = await sponsors.deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
         })
 
         // Send a ping to confirm a successful connection
