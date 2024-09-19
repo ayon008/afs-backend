@@ -124,7 +124,6 @@ async function run() {
         app.post('/userToken', async (req, res) => {
             try {
                 const { email } = req.body;
-
                 // Input validation
                 if (!email || typeof email !== 'string') {
                     return res.status(400).send({ error: true, message: 'Invalid email format' });
@@ -184,17 +183,16 @@ async function run() {
                 const query = { uid: { $eq: uid } };
                 const user = await usersCollection.findOne(query);
 
-                // if (req.decoded.email !== user.email) {
-                //     return res.status(401).send({ message: 'Invalid token' });
-                // }
-
                 if (user) {
+                    console.log('clicked y user');
                     res.status(200).send(user);
                 } else {
                     res.status(404).send({ error: true, message: 'User not found' });
                 }
             } catch (error) {
                 console.error('Error fetching user:', error);
+                console.log(error.message);
+
                 res.status(500).send({ error: true, message: 'Internal server error' });
             }
         });
@@ -299,12 +297,12 @@ async function run() {
                 } = userData;
 
                 // Insert the geoJSON data into the collection
-                const result = await GeoCollection.insertOne(data);
+                const result = await GeoCollection.insertOne({ ...data, lastUploadedTime });
 
                 // Check if the insert was acknowledged by MongoDB
                 if (result.acknowledged) {
                     // Call updatePointTable function to update the points
-                    if (!status) {
+                    if (status) {
                         await updatePointTable(displayName, uid, pays, photoURL, pointTable, category, WatermanCrown, totalTime, 1, distance, city, lastUploadedTime);
                     } // Ensure updatePointTable is awaited if it's async
                     return res.status(201).send({ success: true, message: 'Data inserted and points updated', result });
@@ -326,21 +324,81 @@ async function run() {
 
 
         app.patch('/updateStatus/:id', async (req, res) => {
-            const status = req.body.status;
+            const statusGPX = req.body.status;
+            console.log(statusGPX);
+            
             const id = req.params.id;
-            const query = { _id: new ObjectId(id) };
-            const find = await GeoCollection.findOne(query);
-            const updateStatus = await GeoCollection.updateOne(query, { $set: { status: status } }, {});
-            const { category, pointsByTime, uid, pointsByDistance } = find;
-            const userData = await usersCollection.findOne({ uid: { $eq: uid } });
-            const { displayName,
-                photoURL
-            } = userData;
-            if (status) {
-                await updatePointTable(displayName, uid, photoURL, pointTable, category, pointsByDistance, pointsByTime);
+
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).json({ error: true, message: 'Invalid ID format' });
             }
-            res.send(updateStatus);
-        })
+            const query = { _id: new ObjectId(id) };
+            try {
+                // Find the GPX document by ID
+                const findGPX = await GeoCollection.findOne(query);
+
+                if (!findGPX) {
+                    return res.status(404).json({ error: true, message: 'GPX file not found' });
+                }
+
+                if (!statusGPX) {
+                    return res.status(400).json({ error: true, message: 'Status is required' });
+                }
+
+                // Update the status field in the GPX document
+                const updateStatus = await GeoCollection.updateOne(query, { $set: { status: statusGPX } });
+
+                if (updateStatus.modifiedCount === 0) {
+                    return res.status(500).json({ error: true, message: 'Failed to update status' });
+                }
+
+                const { category, totalTime, uid, status, distance, lastUploadedTime } = findGPX;
+
+                // Find the corresponding user by UID
+                const userData = await usersCollection.findOne({ uid });
+
+                if (!userData) {
+                    return res.status(404).json({ error: true, message: 'User not found' });
+                }
+
+                const {
+                    displayName,
+                    photoURL,
+                    pays,
+                    WatermanCrown,
+                    city
+                } = userData;
+
+                // Update the point table if the status has been changed
+                if (statusGPX === true) {
+                    await updatePointTable(
+                        displayName,
+                        uid,
+                        pays,
+                        photoURL,
+                        pointTable,
+                        category,
+                        WatermanCrown,
+                        totalTime,
+                        1, // Assuming this is the points you want to add
+                        distance,
+                        city,
+                        lastUploadedTime
+                    );
+                }
+
+                // Send the updated status response
+                res.status(200).json({
+                    success: true,
+                    message: 'Status updated successfully',
+                    updateStatus
+                });
+
+            } catch (error) {
+                console.error('Error updating status:', error);
+                res.status(500).json({ error: true, message: 'Internal server error' });
+            }
+        });
 
         app.get('/totalPoints', async (req, res) => {
             const find = await pointTable.find().sort({ total: -1 }).toArray();
@@ -352,7 +410,7 @@ async function run() {
             console.log(uid);
             const query = { uid: uid };
             const options = {
-                projection: { filename: 1 },
+                projection: { filename: 1, status: 1 },
             }
             const files = await GeoCollection.find(query, options).toArray();
             console.log(files);
@@ -374,10 +432,29 @@ async function run() {
         app.delete('/sponsors/:id', async (req, res) => {
             const id = req.params.id;
             console.log(id);
-            
             const result = await sponsors.deleteOne({ _id: new ObjectId(id) });
             res.send(result);
         })
+
+        app.patch('/approved/:id', async (req, res) => {
+            const id = req.params.id;
+            const approved = req.body.approved;
+            const query = { _id: new ObjectId(id) };
+            const updatedData = {
+                $set: { approved: approved }
+            }
+            const result = await usersCollection.updateOne(query, updatedData, {});
+            res.send(result);
+        })
+
+
+        app.delete('/fileName/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await GeoCollection.deleteOne(query);
+            res.send(result);
+        })
+
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
