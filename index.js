@@ -455,11 +455,6 @@ async function run() {
             res.send(result);
         })
 
-        app.get('/ee',async (req,res) => {
-            const result = await GeoCollection.find().toArray();
-            res.send(result);
-        })
-
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
