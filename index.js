@@ -97,6 +97,7 @@ async function run() {
         const GeoCollection = dataBase.collection('geo-json');
         const pointTable = dataBase.collection('point-table');
         const sponsors = dataBase.collection('sponsors');
+        const awards = dataBase.collection('awards');
 
 
         const verifyAdmin = async (req, res, next) => {
@@ -124,9 +125,16 @@ async function run() {
         app.post('/userToken', async (req, res) => {
             try {
                 const { email } = req.body;
+
                 // Input validation
                 if (!email || typeof email !== 'string') {
                     return res.status(400).send({ error: true, message: 'Invalid email format' });
+                }
+
+                const userData = await usersCollection.findOne({ email: { $eq: email } });
+
+                if (!userData) {
+                    return res.status(404).json({ error: true, message: 'User not found' });
                 }
 
                 // Generate JWT token
@@ -326,7 +334,7 @@ async function run() {
         app.patch('/updateStatus/:id', async (req, res) => {
             const statusGPX = req.body.status;
             console.log(statusGPX);
-            
+
             const id = req.params.id;
 
             if (!ObjectId.isValid(id)) {
@@ -417,9 +425,9 @@ async function run() {
             res.send(files);
         })
 
-
         app.get('/sponsors', async (req, res) => {
             const data = await sponsors.find().toArray();
+            console.log(data);
             res.send(data);
         })
 
@@ -455,6 +463,50 @@ async function run() {
             res.send(result);
         })
 
+        app.post('/addAwards', async (req, res) => {
+            const data = req.body
+            const category = data.category;
+            const position = data.position;
+            const query = { $and: [{ category: { $eq: category } }, { position: { $eq: position } }] };
+            const options = { upsert: true };
+            const updatedData = {
+                $set: {
+                    category: data.category,
+                    position: data.position,
+                    sponsors1: data.sponsors1,
+                    sponsors2: data.sponsors2,
+                    sponsors3: data.sponsors3,
+                    prize1: data.prize1,
+                    prize2: data.prize2,
+                    prize3: data.prize3,
+                }
+            }
+            const result = await awards.updateOne(query, updatedData, options);
+
+            if (result.matchedCount === 0 && result.upsertedCount === 0) {
+                throw new Error('No document found or created');
+            }
+            res.send(result);
+        })
+
+        app.get('/awards', async (req, res) => {
+            const data = await awards.find().toArray();
+            res.send(data);
+        })
+
+        app.get('/awards/:category', async (req, res) => {
+            const category = req.params.category
+            console.log(category);
+            const query = { category: { $eq: category } };
+            const data = await awards.find(query).sort({ position: 1 }).toArray();
+            res.send(data);
+        })
+
+        app.delete('/award/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await awards.deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
+        })
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
