@@ -98,7 +98,7 @@ async function run() {
         const pointTable = dataBase.collection('point-table');
         const sponsors = dataBase.collection('sponsors');
         const awards = dataBase.collection('awards');
-
+        const faq = dataBase.collection('faq');
 
         const verifyAdmin = async (req, res, next) => {
             const adminEmail = req.decoded.email;
@@ -505,6 +505,23 @@ async function run() {
         app.delete('/award/:id', async (req, res) => {
             const id = req.params.id;
             const result = await awards.deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
+        })
+
+        app.get('/faq', async (req, res) => {
+            const data = await faq.find().toArray();
+            res.send(data);
+        })
+
+        app.post('/faq', async (req, res) => {
+            const data = req.body;
+            const result = await faq.insertOne(data);
+            res.send(result);
+        })
+
+        app.delete('/faq/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await faq.deleteOne({ _id: new ObjectId(id) });
             res.send(result);
         })
 
