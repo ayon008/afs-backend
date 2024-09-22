@@ -232,8 +232,8 @@ async function run() {
                         displayName: data.displayName,
                         surName: data.surName,
                         pays: data.pays,
-                        // afsGear: data.afsGear,
-                        country: data.country,
+                        invoiceURL: data.invoiceURL,
+                        city: data.city,
                         photoURL: data.photoURL
                     }
                 };
