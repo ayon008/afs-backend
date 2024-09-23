@@ -6,6 +6,7 @@ var app = express()
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://ayon008:${process.env.USER_PASSWORD}@cluster0.mptmg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+const axios = require('axios');
 
 app.use(cors())
 app.use(express.json())
@@ -37,7 +38,6 @@ const verify = (req, res, next) => {
         }
     });
 }
-
 
 const updatePointTable = async (displayName, uid, pays, photoURL, collection, category, WatermanCrown, totalTime, session, distance, city, lastUploadedTime) => {
     try {
@@ -100,6 +100,8 @@ async function run() {
         const awards = dataBase.collection('awards');
         const faq = dataBase.collection('faq');
 
+
+
         const verifyAdmin = async (req, res, next) => {
             const adminEmail = req.decoded.email;
             const query = { email: { $eq: adminEmail } }
@@ -138,7 +140,7 @@ async function run() {
                 }
 
                 // Generate JWT token
-                const token = jwt.sign({ email }, process.env.ACCESS_TOKEN, { expiresIn: '1h' });
+                const token = jwt.sign({ email, admin: userData.admin }, process.env.ACCESS_TOKEN, { expiresIn: '1h' });
 
                 // Send the token as a response
                 res.send({ token });
@@ -148,9 +150,9 @@ async function run() {
             }
         });
 
-
         // Post user Details to database
         app.post('/user', async (req, res) => {
+
             try {
                 const data = req.body;
                 // Validate input data
@@ -165,7 +167,10 @@ async function run() {
                 else {
                     const result = await usersCollection.insertOne(data);
                     if (result.acknowledged && result.insertedId) {
-                        return res.status(201).send({ message: 'User added successfully', user: { _id: result.insertedId, ...data } });
+                        return res.status(201).send({
+                            message: 'User added successfully',
+                            user: { _id: result.insertedId, ...data }
+                        });
                     } else {
                         return res.status(500).send({ error: true, message: 'Failed to add user' });
                     }
@@ -221,7 +226,8 @@ async function run() {
                 const query = { _id: new ObjectId(id) };
                 const options = { upsert: true };
                 const data = req.body;
-                const { displayName, photoURL, uid, surName } = data;
+                const { displayName, photoURL, uid, surName, pays, city } = data;
+                console.log(pays, city, uid);
 
                 if (req.decoded.email !== data.email) {
                     return res.status(401).send({ message: 'Unauthorized Access' });
@@ -241,10 +247,10 @@ async function run() {
                 // Perform update operation
                 const result = await usersCollection.updateOne(query, updatedData, options);
 
-                const updatePointData =
-                    await pointTable.updateOne({ uid: uid },
-                        { $set: { displayName: displayName, photoURL: photoURL, surName: surName } }, {});
-                console.log(updatePointData);
+                if (result) {
+                    await pointTable.updateOne({ uid: { $eq: uid } },
+                        { $set: { displayName: data?.displayName, photoURL: data?.photoURL, surName: data?.surName, pays: data?.pays, city: data?.city } }, {});
+                }
 
                 if (result.matchedCount === 0 && result.upsertedCount === 0) {
                     return res.status(404).send({ error: true, message: 'User not found' });
