@@ -433,7 +433,6 @@ async function run() {
 
         app.get('/sponsors', async (req, res) => {
             const data = await sponsors.find().toArray();
-            console.log(data);
             res.send(data);
         })
 
