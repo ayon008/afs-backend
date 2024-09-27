@@ -46,9 +46,14 @@ const updatePointTable = async (displayName, uid, pays, photoURL, collection, ca
         if (!displayName || typeof displayName !== 'string') throw new Error('Invalid display name');
         if (!category || typeof category !== 'string') throw new Error('Invalid category');
 
+        const response = await axios.get(`https://restcountries.com/v3.1/name/${pays}`);
+        const flag = response.data[0]?.flags?.png || ''
+
+
         // Prepare the query and options
         const query = { uid: uid };
-        const options = { upsert: true }; // If the document doesn't exist, create a new one
+        const options = { upsert: true };
+        // If the document doesn't exist, create a new one
         // Construct the update data
         const updatedData = {
             $set: {
@@ -56,6 +61,7 @@ const updatePointTable = async (displayName, uid, pays, photoURL, collection, ca
                 uid: uid,
                 photoURL: photoURL,
                 pays: pays,
+                flag: flag,
                 WatermanCrown: WatermanCrown,
                 city: city,
                 lastUploadedTime: lastUploadedTime
