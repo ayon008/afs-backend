@@ -45,11 +45,6 @@ const updatePointTable = async (displayName, uid, pays, photoURL, collection, ca
         if (!uid || typeof uid !== 'string') throw new Error('Invalid UID');
         if (!displayName || typeof displayName !== 'string') throw new Error('Invalid display name');
         if (!category || typeof category !== 'string') throw new Error('Invalid category');
-
-        const response = await axios.get(`https://restcountries.com/v3.1/name/${pays}`);
-        const flag = response.data[0]?.flags?.png || ''
-
-
         // Prepare the query and options
         const query = { uid: uid };
         const options = { upsert: true };
@@ -61,7 +56,6 @@ const updatePointTable = async (displayName, uid, pays, photoURL, collection, ca
                 uid: uid,
                 photoURL: photoURL,
                 pays: pays,
-                flag: flag,
                 WatermanCrown: WatermanCrown,
                 city: city,
                 lastUploadedTime: lastUploadedTime
