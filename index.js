@@ -137,7 +137,7 @@ const decreasePointTable = async (displayName, uid, pays, photoURL, collection, 
 };
 
 app.get('/', function (req, res) {
-    res.send('server is running')
+    res.send('afs server is running')
 })
 
 async function run() {
