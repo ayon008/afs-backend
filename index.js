@@ -30,7 +30,7 @@ const verify = (req, res, next) => {
     const token = authorization.split(' ')[1];
     jwt.verify(token, process.env.ACCESS_TOKEN, (error, decoded) => {
         if (error) {
-            console.log(error);
+            // console.log(error);
             return res.status(401).send({ error: true, message: 'unauthorized access' });
         } else {
             req.decoded = decoded;
@@ -85,6 +85,57 @@ const updatePointTable = async (displayName, uid, pays, photoURL, collection, ca
     }
 };
 
+
+const decreasePointTable = async (displayName, uid, pays, photoURL, collection, category, WatermanCrown, totalTime, session, distance, city, lastUploadedTime, pointTable) => {
+    try {
+        // Input validation
+        if (!uid || typeof uid !== 'string') throw new Error('Invalid UID');
+        if (!displayName || typeof displayName !== 'string') throw new Error('Invalid display name');
+        if (!category || typeof category !== 'string') throw new Error('Invalid category');
+
+        // Prepare the query and options
+        const query = { uid: uid };
+        const options = { upsert: true }; // If the document doesn't exist, create a new one
+        // Construct the update data
+        const updatedData = {
+            $set: {
+                displayName: displayName,
+                uid: uid,
+                photoURL: photoURL,
+                pays: pays,
+                WatermanCrown: WatermanCrown,
+                city: city,
+                lastUploadedTime: lastUploadedTime
+            },
+            $inc: {
+                [`${category}`]: -totalTime,
+                [`${category}Distance`]: -distance,
+                [`${category}Session`]: -session,
+                session: -session,
+                total: -totalTime,
+                distance: -distance
+            }
+        };
+
+        // Execute the update and return the result
+        const result = await collection.updateOne(query, updatedData, options);
+        const filter = { $and: [{ uid: uid }, { total: 0 }] }
+
+        const point = await pointTable.deleteOne(filter);
+        console.log(point);
+
+        if (result.matchedCount === 0 && result.upsertedCount === 0) {
+            throw new Error('No document found or created');
+        }
+
+        return result;
+    } catch (error) {
+        // Handle errors in production by logging them and throwing
+        console.error('Error updating point table:', error);
+        throw new Error('Failed to update point table');
+    }
+};
+
 app.get('/', function (req, res) {
     res.send('server is running')
 })
@@ -100,13 +151,11 @@ async function run() {
         const awards = dataBase.collection('awards');
         const faq = dataBase.collection('faq');
 
-
-
         const verifyAdmin = async (req, res, next) => {
             const adminEmail = req.decoded.email;
             const query = { email: { $eq: adminEmail } }
             const findAdmin = await usersCollection.findOne(query);
-            if (findAdmin.role !== 'admin') {
+            if (findAdmin.admin !== true) {
                 return res.status(403).send({ error: true, message: 'unauthorized access' })
             }
             next();
@@ -184,10 +233,8 @@ async function run() {
 
         // Get user by uid
         app.get('/user/:uid', async (req, res) => {
-            console.log('clicked');
             try {
                 const uid = req.params.uid;
-                console.log(uid)
                 // Validate the UID
                 if (!uid) {
                     return res.status(400).send({ error: true, message: 'Invalid UID' });
@@ -197,7 +244,6 @@ async function run() {
                 const user = await usersCollection.findOne(query);
 
                 if (user) {
-                    console.log('clicked y user');
                     res.status(200).send(user);
                 } else {
                     res.status(404).send({ error: true, message: 'User not found' });
@@ -213,7 +259,7 @@ async function run() {
 
         // get all users
 
-        app.get('/allUsers', async (req, res) => {
+        app.get('/allUsers', verify, verifyAdmin, async (req, res) => {
             const data = await usersCollection.find().toArray();
             res.send(data);
         })
@@ -221,13 +267,11 @@ async function run() {
         // Update user by _id 
         app.patch('/user/:id', verify, async (req, res) => {
             try {
-                console.log('clicked');
                 const id = req.params.id;
                 const query = { _id: new ObjectId(id) };
                 const options = { upsert: true };
                 const data = req.body;
                 const { displayName, photoURL, uid, surName, pays, city } = data;
-                console.log(pays, city, uid);
 
                 if (req.decoded.email !== data.email) {
                     return res.status(401).send({ message: 'Unauthorized Access' });
@@ -337,7 +381,7 @@ async function run() {
         })
 
 
-        app.patch('/updateStatus/:id', async (req, res) => {
+        app.patch('/updateStatus/:id', verify, verifyAdmin, async (req, res) => {
             const statusGPX = req.body.status;
             console.log(statusGPX);
 
@@ -353,10 +397,6 @@ async function run() {
 
                 if (!findGPX) {
                     return res.status(404).json({ error: true, message: 'GPX file not found' });
-                }
-
-                if (!statusGPX) {
-                    return res.status(400).json({ error: true, message: 'Status is required' });
                 }
 
                 // Update the status field in the GPX document
@@ -400,6 +440,23 @@ async function run() {
                         lastUploadedTime
                     );
                 }
+                if (statusGPX === false) {
+                    await decreasePointTable(
+                        displayName,
+                        uid,
+                        pays,
+                        photoURL,
+                        pointTable,
+                        category,
+                        WatermanCrown,
+                        totalTime,
+                        1, // Assuming this is the points you want to add
+                        distance,
+                        city,
+                        lastUploadedTime,
+                        pointTable
+                    )
+                }
 
                 // Send the updated status response
                 res.status(200).json({
@@ -415,7 +472,8 @@ async function run() {
         });
 
         app.get('/totalPoints', async (req, res) => {
-            const find = await pointTable.find().sort({ total: -1 }).toArray();
+            const query = { total: { $gt: 0 } }
+            const find = await pointTable.find(query).sort({ total: -1 }).toArray();
             res.send(find);
         })
 
@@ -524,11 +582,40 @@ async function run() {
             res.send(result);
         })
 
+        app.patch('/makeAdmin/:id', async (req, res) => {
+            const id = req.params.id;
+            const admin = req.body.admin;
+            const query = { _id: new ObjectId(id) };
+            const updatedData = {
+                $set: {
+                    admin: admin
+                }
+            }
+            const resultedData = await usersCollection.updateOne(query, updatedData, { upsert: true });
+            console.log(resultedData);
+            res.send(resultedData);
+        })
+
+        app.patch('/removeAdmin/:id', async (req, res) => {
+            const id = req.params.id;
+            const admin = req.body.admin;
+            const query = { _id: new ObjectId(id) };
+            const updatedData = {
+                $set: {
+                    admin: admin
+                }
+            }
+            const resultedData = await usersCollection.updateOne(query, updatedData, { upsert: true });
+            console.log(resultedData);
+            res.send(resultedData);
+        })
+
         app.delete('/faq/:id', async (req, res) => {
             const id = req.params.id;
             const result = await faq.deleteOne({ _id: new ObjectId(id) });
             res.send(result);
         })
+
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
