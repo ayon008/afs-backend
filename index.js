@@ -45,10 +45,10 @@ const updatePointTable = async (displayName, uid, pays, photoURL, collection, ca
         if (!uid || typeof uid !== 'string') throw new Error('Invalid UID');
         if (!displayName || typeof displayName !== 'string') throw new Error('Invalid display name');
         if (!category || typeof category !== 'string') throw new Error('Invalid category');
-
         // Prepare the query and options
         const query = { uid: uid };
-        const options = { upsert: true }; // If the document doesn't exist, create a new one
+        const options = { upsert: true };
+        // If the document doesn't exist, create a new one
         // Construct the update data
         const updatedData = {
             $set: {
@@ -148,6 +148,7 @@ async function run() {
         const GeoCollection = dataBase.collection('geo-json');
         const pointTable = dataBase.collection('point-table');
         const sponsors = dataBase.collection('sponsors');
+        const events = dataBase.collection('events');
         const awards = dataBase.collection('awards');
         const faq = dataBase.collection('faq');
 
@@ -190,7 +191,6 @@ async function run() {
 
                 // Generate JWT token
                 const token = jwt.sign({ email, admin: userData.admin }, process.env.ACCESS_TOKEN, { expiresIn: '1h' });
-
                 // Send the token as a response
                 res.send({ token });
             } catch (error) {
@@ -539,6 +539,10 @@ async function run() {
                     sponsors1: data.sponsors1,
                     sponsors2: data.sponsors2,
                     sponsors3: data.sponsors3,
+                    sponsors4: data.sponsors4,
+                    sponsors5: data.sponsors5,
+                    sponsors6: data.sponsors6,
+                    sponsors7: data.sponsors7,
                     prize1: data.prize1,
                     prize2: data.prize2,
                     prize3: data.prize3,
@@ -614,6 +618,41 @@ async function run() {
             const id = req.params.id;
             const result = await faq.deleteOne({ _id: new ObjectId(id) });
             res.send(result);
+        })
+
+        app.patch('/targetedDate/67067fa3adad600b40fda96c', verify, verifyAdmin, async (req, res) => {
+            const date = req.body;
+            console.log(date);
+            const query = { _id: new ObjectId('67067fa3adad600b40fda96c') };
+            const result = await events.updateOne(query, {
+                $set: {
+                    date: date.date
+                }
+            }, { upsert: true });
+            res.send(result);
+        })
+
+        app.patch('/targetedDate/6706bdd4a8317f059a67151a', verify, verifyAdmin, async (req, res) => {
+            const date = req.body;
+            console.log(date);
+            const query = { _id: new ObjectId('6706bdd4a8317f059a67151a') };
+            const result = await events.updateOne(query, {
+                $set: {
+                    date: date.date,
+                    message: date.message
+                }
+            }, { upsert: true });
+            res.send(result);
+        })
+
+        app.get('/targetedDate/67067fa3adad600b40fda96c', verify, verifyAdmin, async (req, res) => {
+            const data = await events.findOne({ _id: new ObjectId('67067fa3adad600b40fda96c') })
+            res.send(data);
+        })
+
+        app.get('/targetedDate/6706bdd4a8317f059a67151a', async (req, res) => {
+            const data = await events.findOne({ _id: new ObjectId('6706bdd4a8317f059a67151a') })
+            res.send(data);
         })
 
 
