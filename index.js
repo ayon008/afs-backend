@@ -6,7 +6,6 @@ var app = express()
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://ayon008:${process.env.USER_PASSWORD}@cluster0.mptmg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-const axios = require('axios');
 
 app.use(cors())
 app.use(express.json())
@@ -653,6 +652,24 @@ async function run() {
         app.get('/targetedDate/6706bdd4a8317f059a67151a', async (req, res) => {
             const data = await events.findOne({ _id: new ObjectId('6706bdd4a8317f059a67151a') })
             res.send(data);
+        })
+
+        app.patch('/changeCategory/:id', verify, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const data = req.body;
+            const updatedData = {
+                $set: {
+                    Wingfoil: data.Wingfoil,
+                    Windfoil: data.Windfoil,
+                    Downwind: data.Downwind,
+                    Dockstart: data.Dockstart,
+                    Downwind: data.Downwind,
+                    WatermanCrown: data.WatermanCrown
+                }
+            }
+            const result = await usersCollection.updateOne(query, updatedData);
+            res.send(result);
         })
 
 
