@@ -654,22 +654,40 @@ async function run() {
             res.send(data);
         })
 
-        app.patch('/changeCategory/:id', async (req, res) => {
+        app.patch('/changeCategory/:id', verify, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const data = req.body;
+            const uid = data.uid;
             const updatedData = {
                 $set: {
                     Wingfoil: data.Wingfoil,
                     Windfoil: data.Windfoil,
                     Downwind: data.Downwind,
                     Dockstart: data.Dockstart,
+                    Surffoil: data.Surffoil,
                     Downwind: data.Downwind,
                     WatermanCrown: data.WatermanCrown
                 }
             }
             const result = await usersCollection.updateOne(query, updatedData);
             res.send(result);
+        })
+
+        app.get('/getDetails/:uid', verify, verifyAdmin, async (req, res) => {
+            const uid = req.params.uid;
+            const data = await Promise.all([
+                pointTable.findOne({ uid: uid }), GeoCollection.find({ uid: uid }).toArray()
+            ]);
+            console.log({
+                pointTable: data[0],
+                files: data[1]
+            });
+
+            res.send({
+                pointTable: data[0],
+                files: data[1]
+            });
         })
 
 
