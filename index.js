@@ -654,7 +654,7 @@ async function run() {
             res.send(data);
         })
 
-        app.patch('/changeCategory/:id', verify, verifyAdmin, async (req, res) => {
+        app.patch('/changeCategory/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const data = req.body;
