@@ -690,6 +690,23 @@ async function run() {
             });
         })
 
+        app.get('/gpxExcelData', async (req, res) => {
+            const data = await GeoCollection.find().toArray();
+            const uids = data?.map(d => d.uid);
+            const users = await Promise.all(uids.map(uid => usersCollection.findOne({ uid: uid }, {
+                projection: {
+                    name: 1,
+                    email: 1,
+                    _id: 0
+                }
+            })));
+            const result = data?.map((singleData, i) => {
+                const finalData = { ...singleData, ...users[i] }
+                return finalData;
+            })
+            res.send(result);
+        })
+
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
